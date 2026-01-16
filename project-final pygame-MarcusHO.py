@@ -1,6 +1,7 @@
-# Pygame Final Project – Collect & Survive (Enhanced Edition)
-# New Features: Bigger map, more blocks, health system with damage, coin counter, visual health bar
+# Pygame Final Project – Collect & Survive (Enhanced Edition with Boss)
+# New Features: Boss enemy, knockback, damage effects, visual feedback
 
+import math
 import random
 
 import pygame
@@ -21,11 +22,14 @@ DARK_RED = (139, 0, 0)
 PLAYER_SIZE = 40
 BLOCK_SIZE = 25
 ENEMY_SIZE = 30
+BOSS_SIZE = 60
 
 START_TIME = 60  # seconds
 TARGET_SCORE = 50  # increased for bigger map
-ENEMY_DAMAGE = 5  # damage per hit
-DAMAGE_COOLDOWN = 1000  # milliseconds between damage
+ENEMY_DAMAGE = 10  # damage per hit (changed from 5% to 10%)
+BOSS_DAMAGE = 50  # boss deals 50% damage
+DAMAGE_COOLDOWN = 500  # milliseconds between damage (0.5 seconds)
+KNOCKBACK_FORCE = 15  # how far player gets pushed back
 
 
 # -------------------- CLASSES --------------------
@@ -39,16 +43,32 @@ class Player(pygame.sprite.Sprite):
         self.coins = 0
         self.health = 100
         self.last_damage_time = 0
+        self.damage_flash_time = 0  # for red screen effect
+        self.knockback_vx = 0
+        self.knockback_vy = 0
 
     def update(self, keys):
-        if keys[pygame.K_a] or keys[pygame.K_LEFT]:
-            self.rect.x -= self.speed
-        if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-            self.rect.x += self.speed
-        if keys[pygame.K_w] or keys[pygame.K_UP]:
-            self.rect.y -= self.speed
-        if keys[pygame.K_s] or keys[pygame.K_DOWN]:
-            self.rect.y += self.speed
+        # Apply knockback
+        if self.knockback_vx != 0 or self.knockback_vy != 0:
+            self.rect.x += self.knockback_vx
+            self.rect.y += self.knockback_vy
+            # Reduce knockback over time
+            self.knockback_vx *= 0.8
+            self.knockback_vy *= 0.8
+            if abs(self.knockback_vx) < 0.5:
+                self.knockback_vx = 0
+            if abs(self.knockback_vy) < 0.5:
+                self.knockback_vy = 0
+        else:
+            # Normal movement only when not being knocked back
+            if keys[pygame.K_a] or keys[pygame.K_LEFT]:
+                self.rect.x -= self.speed
+            if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
+                self.rect.x += self.speed
+            if keys[pygame.K_w] or keys[pygame.K_UP]:
+                self.rect.y -= self.speed
+            if keys[pygame.K_s] or keys[pygame.K_DOWN]:
+                self.rect.y += self.speed
 
         # keep on screen
         self.rect.clamp_ip(pygame.Rect(0, 0, WIDTH, HEIGHT))
@@ -58,11 +78,28 @@ class Player(pygame.sprite.Sprite):
         if current_time - self.last_damage_time >= DAMAGE_COOLDOWN:
             self.health -= amount
             self.last_damage_time = current_time
+            self.damage_flash_time = current_time  # Start red ring effect
             if self.health < 0:
                 self.health = 0
             print(f"Damage taken! Health: {self.health}%")  # Debug
             return True
         return False
+
+    def apply_knockback(self, enemy_x, enemy_y):
+        """Push player away from enemy"""
+        # Calculate direction from enemy to player
+        dx = self.rect.centerx - enemy_x
+        dy = self.rect.centery - enemy_y
+        distance = math.sqrt(dx**2 + dy**2)
+
+        if distance > 0:
+            # Normalize and apply knockback force
+            self.knockback_vx = (dx / distance) * KNOCKBACK_FORCE
+            self.knockback_vy = (dy / distance) * KNOCKBACK_FORCE
+
+    def draw(self, screen):
+        """Custom draw method - no longer needed for visual effects"""
+        screen.blit(self.image, self.rect)
 
 
 class Block(pygame.sprite.Sprite):
@@ -108,11 +145,46 @@ class Enemy(pygame.sprite.Sprite):
             self.vy *= -1
 
 
+class Boss(pygame.sprite.Sprite):
+    """Big boss enemy that deals 50% damage"""
+
+    def __init__(self, boss_image_path=None):
+        super().__init__()
+
+        # Try to load the boss image
+        try:
+            # If you have the image file, use it
+            self.image = pygame.image.load(boss_image_path)
+            self.image = pygame.transform.scale(self.image, (BOSS_SIZE, BOSS_SIZE))
+        except:
+            # Fallback: create a distinctive boss sprite
+            self.image = pygame.Surface((BOSS_SIZE, BOSS_SIZE))
+            self.image.fill(DARK_RED)
+            # Add a crown effect with yellow
+            pygame.draw.rect(self.image, YELLOW, (10, 0, 40, 15))
+            pygame.draw.polygon(self.image, YELLOW, [(15, 0), (25, 10), (20, 0)])
+            pygame.draw.polygon(self.image, YELLOW, [(35, 0), (45, 10), (40, 0)])
+
+        self.rect = self.image.get_rect(
+            center=(random.randint(100, WIDTH - 100), random.randint(100, HEIGHT - 100))
+        )
+        # Boss moves slower but is more dangerous
+        speed = 2
+        self.vx = random.choice([-speed, speed])
+        self.vy = random.choice([-speed, speed])
+
+    def update(self):
+        self.rect.x += self.vx
+        self.rect.y += self.vy
+
+        if self.rect.left <= 0 or self.rect.right >= WIDTH:
+            self.vx *= -1
+        if self.rect.top <= 0 or self.rect.bottom >= HEIGHT:
+            self.vy *= -1
+
+
 def draw_health_bar(screen, x, y, width, height, health_percent):
     """Draw a visual health bar with percentage"""
-    # Border
-    pygame.draw.rect(screen, BLACK, (x - 2, y - 2, width + 4, height + 4), 2)
-
     # Background (empty health)
     pygame.draw.rect(screen, DARK_RED, (x, y, width, height))
 
@@ -127,14 +199,50 @@ def draw_health_bar(screen, x, y, width, height, health_percent):
     else:
         health_color = RED
 
-    pygame.draw.rect(screen, health_color, (x, y, health_width, height))
+    if health_width > 0:
+        pygame.draw.rect(screen, health_color, (x, y, health_width, height))
+
+    # Border drawn last so it's on top
+    pygame.draw.rect(screen, BLACK, (x, y, width, height), 3)
+
+
+def get_screen_shake_offset(shake_start_time, current_time):
+    """Calculate screen shake offset based on time since damage"""
+    time_since_shake = current_time - shake_start_time
+
+    if time_since_shake < 300:  # SCREEN_SHAKE_DURATION in milliseconds
+        # Calculate shake intensity that decreases over time
+        progress = time_since_shake / 300  # SCREEN_SHAKE_DURATION
+        intensity = 10 * (1 - progress)  # SCREEN_SHAKE_INTENSITY
+
+        # Random shake in x and y directions
+        shake_x = random.randint(-int(intensity), int(intensity))
+        shake_y = random.randint(-int(intensity), int(intensity))
+        return shake_x, shake_y
+    return 0, 0
+
+
+def draw_damage_overlay(screen, damage_time, current_time):
+    """Draw red screen overlay when damaged"""
+    time_since_damage = current_time - damage_time
+
+    if time_since_damage < 400:  # Show for 0.4 seconds
+        # Create semi-transparent red overlay
+        overlay = pygame.Surface((WIDTH, HEIGHT))
+        overlay.set_alpha(80)  # Transparency level (0-255)
+        overlay.fill(RED)
+        screen.blit(overlay, (0, 0))
+
+        # Draw thick red border around entire screen
+        border_thickness = 15
+        pygame.draw.rect(screen, RED, (0, 0, WIDTH, HEIGHT), border_thickness)
 
 
 # -------------------- GAME FUNCTION --------------------
 def game():
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Collect & Survive - Enhanced Edition")
+    pygame.display.set_caption("Collect & Survive - Boss Edition")
     clock = pygame.time.Clock()
 
     font = pygame.font.SysFont(None, 32)
@@ -148,6 +256,7 @@ def game():
     blocks = pygame.sprite.Group()
     coins = pygame.sprite.Group()
     enemies = pygame.sprite.Group()
+    bosses = pygame.sprite.Group()
 
     player = Player()
 
@@ -165,11 +274,15 @@ def game():
         blocks.empty()
         coins.empty()
         enemies.empty()
+        bosses.empty()
 
         player.rect.center = (WIDTH // 2, HEIGHT // 2)
         player.coins = 0
         player.health = 100
         player.last_damage_time = 0
+        player.damage_flash_time = 0
+        player.knockback_vx = 0
+        player.knockback_vy = 0
 
         all_sprites.add(player)
 
@@ -185,11 +298,16 @@ def game():
             coins.add(c)
             all_sprites.add(c)
 
-        # Spawn enemies
+        # Spawn regular enemies
         for _ in range(2):
             e = Enemy(enemy_speed)
             enemies.add(e)
             all_sprites.add(e)
+
+        # Spawn ONE boss enemy
+        boss = Boss()  # If you have boss.png in the same folder, use Boss('boss.png')
+        bosses.add(boss)
+        all_sprites.add(boss)
 
         start_ticks = pygame.time.get_ticks()
 
@@ -219,7 +337,7 @@ def game():
             msg1 = font.render("Move with WASD or Arrow Keys", True, BLACK)
             msg2 = font.render("Collect green blocks and yellow coins", True, BLACK)
             msg3 = font.render(
-                "Avoid red enemies - they damage your health!", True, BLACK
+                "Avoid red enemies (10% damage) and the BOSS (50% damage)!", True, BLACK
             )
             msg4 = font.render(
                 f"Goal: Collect {TARGET_SCORE} blocks before time runs out", True, BLACK
@@ -235,9 +353,15 @@ def game():
 
         # -------------------- PLAY --------------------
         elif state == "play":
+            # Calculate screen shake offset
+            shake_x, shake_y = get_screen_shake_offset(
+                player.damage_flash_time, current_time
+            )
+
             keys = pygame.key.get_pressed()
             player.update(keys)
             enemies.update()
+            bosses.update()
 
             # Collect blocks
             block_hits = pygame.sprite.spritecollide(player, blocks, True)
@@ -268,10 +392,19 @@ def game():
                     coins.add(c)
                     all_sprites.add(c)
 
-            # Enemy collision - now damages instead of instant death
+            # Regular enemy collision - 10% damage with knockback
             enemy_hits = pygame.sprite.spritecollide(player, enemies, False)
-            if enemy_hits:
-                player.take_damage(ENEMY_DAMAGE, current_time)
+            for enemy in enemy_hits:
+                damaged = player.take_damage(ENEMY_DAMAGE, current_time)
+                if damaged:
+                    player.apply_knockback(enemy.rect.centerx, enemy.rect.centery)
+
+            # Boss collision - 50% damage with stronger knockback
+            boss_hits = pygame.sprite.spritecollide(player, bosses, False)
+            for boss in boss_hits:
+                damaged = player.take_damage(BOSS_DAMAGE, current_time)
+                if damaged:
+                    player.apply_knockback(boss.rect.centerx, boss.rect.centery)
 
             # Check if health depleted
             if player.health <= 0:
@@ -287,9 +420,22 @@ def game():
             if player.coins >= TARGET_SCORE:
                 state = "win"
 
-            all_sprites.draw(screen)
+            # Draw all sprites with screen shake offset
+            for sprite in all_sprites:
+                if sprite != player:
+                    screen.blit(
+                        sprite.image, (sprite.rect.x + shake_x, sprite.rect.y + shake_y)
+                    )
 
-            # HUD - Score and Timer
+            # Draw player with screen shake
+            screen.blit(
+                player.image, (player.rect.x + shake_x, player.rect.y + shake_y)
+            )
+
+            # Draw damage overlay (red screen flash and border)
+            draw_damage_overlay(screen, player.damage_flash_time, current_time)
+
+            # HUD - Score and Timer (not affected by shake)
             hud = font.render(
                 f"Score: {player.coins}/{TARGET_SCORE}   Time: {time_left}s",
                 True,
@@ -297,7 +443,7 @@ def game():
             )
             screen.blit(hud, (10, 10))
 
-            # Visual Health Bar
+            # Visual Health Bar - Draw AFTER sprites so it's on top
             health_bar_x = 10
             health_bar_y = 50
             health_bar_width = 300
