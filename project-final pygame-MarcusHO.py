@@ -2,6 +2,7 @@
 # New Features: Bigger map, more blocks, health system with damage, coin counter, visual health bar
 
 import random
+
 import pygame
 
 # -------------------- CONSTANTS --------------------
@@ -76,6 +77,7 @@ class Block(pygame.sprite.Sprite):
 
 class Coin(pygame.sprite.Sprite):
     """Special yellow collectible coins"""
+
     def __init__(self):
         super().__init__()
         self.image = pygame.Surface((20, 20))
@@ -110,13 +112,13 @@ def draw_health_bar(screen, x, y, width, height, health_percent):
     """Draw a visual health bar with percentage"""
     # Border
     pygame.draw.rect(screen, BLACK, (x - 2, y - 2, width + 4, height + 4), 2)
-    
+
     # Background (empty health)
     pygame.draw.rect(screen, DARK_RED, (x, y, width, height))
-    
+
     # Foreground (current health)
     health_width = int(width * (health_percent / 100))
-    
+
     # Color changes based on health level
     if health_percent > 60:
         health_color = GREEN
@@ -124,7 +126,7 @@ def draw_health_bar(screen, x, y, width, height, health_percent):
         health_color = YELLOW
     else:
         health_color = RED
-    
+
     pygame.draw.rect(screen, health_color, (x, y, health_width, height))
 
 
@@ -195,7 +197,7 @@ def game():
     while running:
         clock.tick(FPS)
         current_time = pygame.time.get_ticks()
-        
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -216,8 +218,12 @@ def game():
             title = big_font.render("COLLECT & SURVIVE", True, BLACK)
             msg1 = font.render("Move with WASD or Arrow Keys", True, BLACK)
             msg2 = font.render("Collect green blocks and yellow coins", True, BLACK)
-            msg3 = font.render("Avoid red enemies - they damage your health!", True, BLACK)
-            msg4 = font.render(f"Goal: Collect {TARGET_SCORE} blocks before time runs out", True, BLACK)
+            msg3 = font.render(
+                "Avoid red enemies - they damage your health!", True, BLACK
+            )
+            msg4 = font.render(
+                f"Goal: Collect {TARGET_SCORE} blocks before time runs out", True, BLACK
+            )
             msg5 = font.render("Press SPACE to start", True, BLACK)
 
             screen.blit(title, title.get_rect(center=(WIDTH // 2, 200)))
@@ -285,7 +291,9 @@ def game():
 
             # HUD - Score and Timer
             hud = font.render(
-                f"Score: {player.coins}/{TARGET_SCORE}   Time: {time_left}s", True, BLACK
+                f"Score: {player.coins}/{TARGET_SCORE}   Time: {time_left}s",
+                True,
+                BLACK,
             )
             screen.blit(hud, (10, 10))
 
@@ -294,37 +302,51 @@ def game():
             health_bar_y = 50
             health_bar_width = 300
             health_bar_height = 30
-            
-            draw_health_bar(screen, health_bar_x, health_bar_y, 
-                          health_bar_width, health_bar_height, player.health)
-            
+
+            draw_health_bar(
+                screen,
+                health_bar_x,
+                health_bar_y,
+                health_bar_width,
+                health_bar_height,
+                player.health,
+            )
+
             # Health percentage text
             health_text = font.render(f"Health: {player.health}%", True, BLACK)
-            screen.blit(health_text, (health_bar_x + health_bar_width + 20, health_bar_y))
+            screen.blit(
+                health_text, (health_bar_x + health_bar_width + 20, health_bar_y)
+            )
 
         # -------------------- WIN / LOSE --------------------
         elif state == "win":
             msg = big_font.render("YOU WIN!", True, GREEN)
             score = font.render(f"Final Score: {player.coins}", True, BLACK)
-            health_left = font.render(f"Health Remaining: {player.health}%", True, BLACK)
+            health_left = font.render(
+                f"Health Remaining: {player.health}%", True, BLACK
+            )
             sub = font.render("Press R to return to menu", True, BLACK)
-            
+
             screen.blit(msg, msg.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 60)))
             screen.blit(score, score.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
-            screen.blit(health_left, health_left.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40)))
+            screen.blit(
+                health_left, health_left.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40))
+            )
             screen.blit(sub, sub.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 80)))
 
         elif state == "lose":
             msg = big_font.render("GAME OVER", True, RED)
-            score = font.render(f"Final Score: {player.coins}/{TARGET_SCORE}", True, BLACK)
-            
+            score = font.render(
+                f"Final Score: {player.coins}/{TARGET_SCORE}", True, BLACK
+            )
+
             if player.health <= 0:
                 reason = font.render("You ran out of health!", True, BLACK)
             else:
                 reason = font.render("You ran out of time!", True, BLACK)
-            
+
             sub = font.render("Press R to return to menu", True, BLACK)
-            
+
             screen.blit(msg, msg.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 60)))
             screen.blit(score, score.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
             screen.blit(reason, reason.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40)))
