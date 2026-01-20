@@ -152,12 +152,20 @@ class Boss(pygame.sprite.Sprite):
         super().__init__()
 
         # Try to load the boss image
-        try:
-            # If you have the image file, use it
-            self.image = pygame.image.load(boss_image_path)
-            self.image = pygame.transform.scale(self.image, (BOSS_SIZE, BOSS_SIZE))
-        except:
+        image_loaded = False
+        if boss_image_path:
+            try:
+                # Load the image file
+                self.image = pygame.image.load(boss_image_path)
+                self.image = pygame.transform.scale(self.image, (BOSS_SIZE, BOSS_SIZE))
+                image_loaded = True
+                print(f"Boss image loaded successfully from: {boss_image_path}")
+            except Exception as e:
+                print(f"Could not load boss image: {e}")
+
+        if not image_loaded:
             # Fallback: create a distinctive boss sprite
+            print("Using fallback boss sprite")
             self.image = pygame.Surface((BOSS_SIZE, BOSS_SIZE))
             self.image.fill(DARK_RED)
             # Add a crown effect with yellow
@@ -305,7 +313,8 @@ def game():
             all_sprites.add(e)
 
         # Spawn ONE boss enemy
-        boss = Boss()  # If you have boss.png in the same folder, use Boss('boss.png')
+        # Change 'boss.png' to the actual name of your image file
+        boss = Boss("boss.png")
         bosses.add(boss)
         all_sprites.add(boss)
 
